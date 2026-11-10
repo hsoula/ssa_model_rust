@@ -1,0 +1,10 @@
+[
+  {
+    "reaction_type":"0b11",
+    "reaction_speed": 0.01,
+    "s1": "0xFF01",
+    "s2": "0x0A10",
+    "p1": "0xFF1A",
+    "p2": "0x0A10"
+  }
+]

@@ -1,0 +1,57 @@
+[{
+  "reaction_type":"0b100",
+  "reaction_speed": 0.01,
+  "s1": "0x0100",
+  "s2": "0x0000",
+  "p1": "0x0000",
+  "p2": "0x0000"
+},
+  {
+    "reaction_type":"0b100",
+    "reaction_speed": 0.01,
+    "s1": "0x0200",
+    "s2": "0x0000",
+    "p1": "0x0000",
+    "p2": "0x0000"
+  },
+  {
+    "reaction_type":"0b100",
+    "reaction_speed": 0.01,
+    "s1": "0x0300",
+    "s2": "0x0000",
+    "p1": "0x0000",
+    "p2": "0x0000"
+  },
+  {
+    "reaction_type":"0b100",
+    "reaction_speed": 0.01,
+    "s1": "0x0400",
+    "s2": "0x0000",
+    "p1": "0x0000",
+    "p2": "0x0000"
+  },
+  {
+    "reaction_type":"0b100",
+    "reaction_speed": 0.01,
+    "s1": "0x0500",
+    "s2": "0x0000",
+    "p1": "0x0000",
+    "p2": "0x0000"
+  },
+  {
+    "reaction_type":"0b100",
+    "reaction_speed": 0.01,
+    "s1": "0x0600",
+    "s2": "0x0000",
+    "p1": "0x0000",
+    "p2": "0x0000"
+  },
+  {
+    "reaction_type":"0b1000",
+    "reaction_speed": 1,
+    "s1": "0xFF00",
+    "s2": "0xEF00",
+    "p1": "0x0000",
+    "p2": "0x0000"
+  }
+]

@@ -1,0 +1,25 @@
+[{
+  "s1": "0xFF01",
+  "s2": "0xEF02",
+  "p1": "0x0109",
+  "p2": "0x0101",
+  "reaction_type": "0b00",
+  "reaction_speed": 1.0
+},
+  {
+    "s1": "0xFF01",
+    "s2": "0xEF03",
+    "p1": "0x0109",
+    "p2": "0x0101",
+    "reaction_type": "0b00",
+    "reaction_speed": 1.0
+  },
+  {
+    "s1": "0xFF01",
+    "s2": "0xEF04",
+    "p1": "0x0109",
+    "p2": "0x0109",
+    "reaction_type": "0b00",
+    "reaction_speed": 1.0
+  }
+]

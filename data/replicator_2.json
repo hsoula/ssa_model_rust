@@ -1,0 +1,123 @@
+[{
+  "reaction_type":"0b100",
+  "reaction_speed": 0.01,
+  "s1": "0x0100",
+  "s2": "0x0000",
+  "p1": "0x0000",
+  "p2": "0x0000"
+},
+  {
+    "reaction_type":"0b100",
+    "reaction_speed": 0.01,
+    "s1": "0x0200",
+    "s2": "0x0000",
+    "p1": "0x0000",
+    "p2": "0x0000"
+  },
+  {
+    "reaction_type":"0b100",
+    "reaction_speed": 0.01,
+    "s1": "0x0300",
+    "s2": "0x0000",
+    "p1": "0x0000",
+    "p2": "0x0000"
+  },
+  {
+    "reaction_type":"0b100",
+    "reaction_speed": 0.01,
+    "s1": "0x0400",
+    "s2": "0x0000",
+    "p1": "0x0000",
+    "p2": "0x0000"
+  },
+  {
+    "reaction_type":"0b100",
+    "reaction_speed": 0.01,
+    "s1": "0x0500",
+    "s2": "0x0000",
+    "p1": "0x0000",
+    "p2": "0x0000"
+  },
+  {
+    "reaction_type":"0b100",
+    "reaction_speed": 0.01,
+    "s1": "0x0600",
+    "s2": "0x0000",
+    "p1": "0x0000",
+    "p2": "0x0000"
+  },
+  {
+    "reaction_type":"0b1000",
+    "reaction_speed": 1,
+    "s1": "0xFF00",
+    "s2": "0xEF00",
+    "p1": "0x0000",
+    "p2": "0x0000"
+  },
+
+  {
+    "s1" : "0x0508",
+    "s2" : "0x0500",
+    "p1" : "0x0504",
+    "p2" : "0x0503",
+    "reaction_type": "0b10",
+    "reaction_speed": 0.10
+  },
+  {
+    "s1" : "0xFF04",
+    "s2" : "0xFF01",
+    "p1" : "0xFF02",
+    "p2" : "0xFF05",
+    "reaction_type": "0b00",
+    "reaction_speed": 10.0
+  },
+  {
+    "s1" : "0xFF05",
+    "s2" : "0xEF00",
+    "p1" : "0xFF07",
+    "p2" : "0xFF06",
+    "reaction_type": "0b10",
+    "reaction_speed": 0.10
+  },
+  {
+    "s1" : "0xFF03",
+    "s2" : "0xFF06",
+    "p1" : "0xFF02",
+    "p2" : "0xFF0C",
+    "reaction_type": "0b10",
+    "reaction_speed": 0.10
+  },
+  {
+    "s1" : "0xFF07",
+    "s2" : "0xEF0C",
+    "p1" : "0xFF04",
+    "p2" : "0xFF03",
+    "reaction_type": "0b00",
+    "reaction_speed": 10.0
+  },
+  {
+    "s1" : "0x0604",
+    "s2" : "0x0603",
+    "p1" : "0x0608",
+    "p2" : "0x0608",
+    "reaction_type": "0b01",
+    "reaction_speed": 10.0
+  },
+  {
+    "s1" : "0xFF02",
+    "s2" : "0xFF08",
+    "p1" : "0xFF09",
+    "p2" : "0xFF01",
+    "reaction_type": "0b00",
+    "reaction_speed": 10.0
+  },
+  {
+    "s1" : "0xFF09",
+    "s2" : "0xFF09",
+    "p1" : "0xFF08",
+    "p2" : "0xFF08",
+    "reaction_type": "0b01",
+    "reaction_speed": 10.0
+  }
+
+]

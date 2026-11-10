@@ -1,0 +1,9 @@
+[{
+  "s1": "0xFF01",
+  "s2": "0xFF02",
+  "p1": "0x0109",
+  "p2": "0x010A",
+  "reaction_type": "0b10",
+  "reaction_speed": 1.0
+}
+  ]
