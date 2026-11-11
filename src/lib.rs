@@ -8,6 +8,7 @@ mod event_log;
 mod reactions_maps;
 pub mod Gene8;
 pub mod mol_genome;
+pub mod bacterium;
 
 pub use atoms::Atom;
 pub use reactions::Reaction;

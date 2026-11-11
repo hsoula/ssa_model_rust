@@ -6,6 +6,7 @@ use std::option::Option;
 use crate::trace;
 //use serde_with::{serde_as, DisplayFromStr};
 use crate::utils::JsonReaction;
+use crate::atoms::{key_symbol, OUTSIDE};
 //#[derive(Debug, Clone, Copy, Deserialize)]
 //use crate::trace;
 
@@ -15,6 +16,9 @@ pub enum ReactionFlag {
     ProductContact = 0b01u8,
     Production = 0b100u8,
     Degradation = 0b1000u8,
+    /// Unimolecular state change of a single atom: `a1 -> a11`.
+    /// Used e.g. for membrane transport in the bacterium reactor.
+    Transform = 0b10000u8,
 }
 //pub mod flags;
 #[derive(Debug, Clone, PartialEq)]
@@ -183,6 +187,72 @@ impl Reaction {
     pub fn is_degradation(&self) -> bool {
         self.reaction_type == ReactionFlag::Degradation as u8
     }
+    pub fn is_transform(&self) -> bool {
+        self.reaction_type == ReactionFlag::Transform as u8
+    }
+
+    /// Parse a reaction written in the same notation `to_string()` prints.
+    ///
+    /// Atoms are `<form letter><state>` (a = form 1, b = form 2, ...).
+    /// Between two atoms, `+` means free (collision / no bond) and `.` means bonded.
+    ///
+    /// * `0 -> a1`                 production
+    /// * `a1 -> 0`                 degradation
+    /// * `a1 -> a11`               transform (single atom changes state)
+    /// * `a1 + b12 -> a12.b13`     collision that creates a bond
+    /// * `a12.b13 -> a12 + b12`    bonded pair that breaks
+    ///
+    /// Uppercase letters are outside the bacterium (`A1`), lowercase inside (`a1`).
+    ///
+    /// Forms never change (Hutton): product i has the same letter as substrate i, only its
+    /// case may change (crossing the membrane). Bonded atoms must share a compartment.
+    pub fn from_rule(id: u32, rule: &str, speed: f64) -> Result<Reaction, String> {
+        let rule: String = rule.chars().filter(|c| !c.is_whitespace()).collect();
+        let (lhs, rhs) = rule.split_once("->")
+            .ok_or_else(|| format!("missing '->' in rule '{rule}'"))?;
+        let base = Reaction::new(id).set_reaction_speed(speed);
+
+        if lhs == "0" {
+            let p = parse_atom_token(rhs)?;
+            return Ok(base.set_reaction_type(ReactionFlag::Production as u8)
+                .set_substrate_key((p as u32) << 16));
+        }
+        if rhs == "0" {
+            let s = parse_atom_token(lhs)?;
+            return Ok(base.set_reaction_type(ReactionFlag::Degradation as u8)
+                .set_substrate_key((s as u32) << 16));
+        }
+
+        let (s1, s2, s_free) = split_pair(lhs)?;
+        let (p1, p2, p_free) = split_pair(rhs)?;
+        match (s2, p2) {
+            (None, None) => {
+                if !same_letter(s1, p1) {
+                    return Err(format!("form cannot change in '{rule}'"));
+                }
+                Ok(base.set_reaction_type(ReactionFlag::Transform as u8)
+                    .set_substrate_key((s1 as u32) << 16)
+                    .set_product_key((p1 as u32) << 16))
+            }
+            (Some(s2), Some(p2)) => {
+                if !same_letter(s1, p1) || !same_letter(s2, p2) {
+                    return Err(format!("form cannot change in '{rule}'"));
+                }
+                // a bonded pair is one molecule, and a molecule lives in one compartment
+                if (!s_free && outside_bit(s1) != outside_bit(s2))
+                    || (!p_free && outside_bit(p1) != outside_bit(p2)) {
+                    return Err(format!("bonded atoms must be on the same side of the membrane in '{rule}'"));
+                }
+                let mut t = 0u8;
+                if s_free { t |= ReactionFlag::SubstrateContact as u8; }
+                if p_free { t |= ReactionFlag::ProductContact as u8; }
+                Ok(base.set_reaction_type(t)
+                    .set_substrate_key((s1 as u32) << 16 | s2 as u32)
+                    .set_product_key((p1 as u32) << 16 | p2 as u32))
+            }
+            _ => Err(format!("both sides must have the same number of atoms in '{rule}'")),
+        }
+    }
 
 
     pub fn reaction_speed(&self) -> f64 {
@@ -248,73 +318,59 @@ impl Reaction {
         v
     }
     pub fn to_string(&self) -> String {
-        let mut ret = String::new();
-
-        let s1 = ((self.substrate_key & 0xffff0000) >> 16) as u16;
-        let s2 = (self.substrate_key & 0x0000ffff) as u16;
-        let p1 = ((self.product_key & 0xffff0000) >> 16) as u16;
-        let p2 = (self.product_key & 0x0000ffff) as u16;
-
-        let high_char = (((s1 & 0xFF00) >> 8) + 96) as u8 as char;
-        let low_char = (s1 & 0xFF) as u8;
+        let s1 = key_symbol(self.get_substrate_a());
+        let s2 = key_symbol(self.get_substrate_b());
+        let p1 = key_symbol(self.get_product_a());
+        let p2 = key_symbol(self.get_product_b());
+        let sep = |free: bool| if free { "+" } else { "." };
 
         if self.is_production() {
-            ret = ret + "0->";
-            ret.push(high_char);
-            ret = ret + &low_char.to_string();
-            ret
-        } else if self.is_degradation()
-        {
-            ret.push(high_char);
-            ret = ret + &low_char.to_string();
-            ret = ret + "->0";
-            ret
+            format!("0->{s1}")
+        } else if self.is_degradation() {
+            format!("{s1}->0")
+        } else if self.is_transform() {
+            format!("{s1}->{p1}")
         } else {
-            match ((s1 & 0xff00) >> 8) as u8 {
-                0xff => ret.push('*'),
-                0xfe => ret.push('?'),
-                _ => ret.push(high_char),
-            }
-            ret = ret + &low_char.to_string();
-            if self.is_substrate_contact() {
-                ret = ret + "+";
-            } else {
-                ret = ret + ".";
-            }
-            let high_char = (((s2 & 0xFF00) >> 8) + 96) as u8 as char;
-            let low_char = (s2 & 0xFF) as u8;
-            match ((s2 & 0xFF00) >> 8) as u8 {
-                0xff => ret.push('*'),
-                0xfe => ret.push('?'),
-                _ => ret.push(high_char),
-            }
-            ret = ret + &low_char.to_string();
-
-            ret = ret + "->";
-
-            let high_char = (((p1 & 0xFF00) >> 8) + 96) as u8 as char;
-            let low_char = (p1 & 0xFF) as u8;
-            match ((p1 & 0xFF00) >> 8) as u8 {
-                0xff => ret.push('*'),
-                0xfe => ret.push('?'),
-                _ => ret.push(high_char),
-            }
-            ret = ret + &low_char.to_string();
-
-            if self.is_product_contact() {
-                ret = ret + "+";
-            } else {
-                ret = ret + ".";
-            }
-            let high_char = (((p2 & 0xFF00) >> 8) + 96) as u8 as char;
-            let low_char = (p2 & 0xFF) as u8;
-            match ((p2 & 0xFF00) >> 8) as u8 {
-                0xff => ret.push('*'),
-                0xfe => ret.push('?'),
-                _ => ret.push(high_char),
-            }
-            ret = ret + &low_char.to_string();
-            ret
+            format!("{s1}{}{s2}->{p1}{}{p2}",
+                sep(self.is_substrate_contact()), sep(self.is_product_contact()))
         }
     }
+}
+
+/// Parse one atom token like `a1`, `b12` or `A1` into a key (form << 8 | state).
+pub fn parse_atom_token(tok: &str) -> Result<u16, String> {
+    let mut chars = tok.chars();
+    let letter = chars.next().ok_or_else(|| "empty atom".to_string())?;
+    // lowercase = inside (a = form 1), uppercase = outside (A = form 1 | OUTSIDE)
+    let form = if letter.is_ascii_lowercase() {
+        (letter as u8) - 96
+    } else if letter.is_ascii_uppercase() {
+        ((letter as u8) - 64) | OUTSIDE
+    } else {
+        return Err(format!("atom '{tok}' must start with a letter"));
+    };
+    let state: u8 = chars.as_str().parse()
+        .map_err(|_| format!("bad state in atom '{tok}'"))?;
+    Ok((form as u16) << 8 | state as u16)
+}
+
+/// Split one side of a rule: `a1` -> (a1, None, _), `a1+b2` -> (a1, Some(b2), free=true),
+/// `a1.b2` -> (a1, Some(b2), free=false).
+fn split_pair(side: &str) -> Result<(u16, Option<u16>, bool), String> {
+    if let Some((a, b)) = side.split_once('+') {
+        Ok((parse_atom_token(a)?, Some(parse_atom_token(b)?), true))
+    } else if let Some((a, b)) = side.split_once('.') {
+        Ok((parse_atom_token(a)?, Some(parse_atom_token(b)?), false))
+    } else {
+        Ok((parse_atom_token(side)?, None, false))
+    }
+}
+
+/// Same letter, ignoring the OUTSIDE (case) bit.
+fn same_letter(a: u16, b: u16) -> bool {
+    (a >> 8) as u8 & !OUTSIDE == (b >> 8) as u8 & !OUTSIDE
+}
+
+fn outside_bit(key: u16) -> bool {
+    (key >> 8) as u8 & OUTSIDE != 0
 }

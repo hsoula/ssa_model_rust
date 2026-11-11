@@ -1,4 +1,4 @@
-use crate::atoms::Atom;
+use crate::atoms::{Atom, OUTSIDE, is_outside_form, is_wildcard_form};
 use crate::links::{get_key, Link};
 use crate::event_log::{EventLog};
 use crate::molecules::Molecule;
@@ -328,7 +328,8 @@ impl Reactor {
             if reaction.is_production() {
                 propensity[i] = reaction.reaction_speed(); // lol easy ^^
             }
-            else if reaction.is_degradation() {
+            else if reaction.is_degradation() || reaction.is_transform() {
+                // first order: k * n(a)
                 let substrate_key_a = reaction.get_substrate_a();
                 propensity[i] = reaction.reaction_speed() * (self.get_atom_number_from_key(substrate_key_a) as f64);
             }
@@ -473,12 +474,20 @@ impl Reactor {
         let substrate_key_b = reaction.get_substrate_b();
         let product_state_a = (reaction.get_product_a() & 0x00FF) as u8;
         let product_state_b = (reaction.get_product_b() & 0x00FF) as u8;
+        let product_key_a = reaction.get_product_a();
+        let product_key_b = reaction.get_product_b();
         let substrate_contact = reaction.is_substrate_contact();
         let product_contact = reaction.is_product_contact();
         let s = reaction.to_string();
         let key_a =substrate_key_a;
         let key_b =substrate_key_b;
-        if reaction.is_degradation() {
+        let is_transform = reaction.is_transform();
+        if is_transform {
+            // single atom changes state (e.g. a1 -> a11 : crosses the membrane)
+            let id = self.get_random_atom_id(substrate_key_a, rng).unwrap();
+            self.get_atom_mut(id).unwrap().set_state(product_state_a);
+            self.cross_if_needed(id, substrate_key_a, product_key_a);
+        } else if reaction.is_degradation() {
             let id = self.get_random_atom_id(substrate_key_a, rng).unwrap();
             self.remove_atom(id);
         } else if reaction.is_production() {
@@ -495,6 +504,9 @@ impl Reactor {
                     if (ida == idb) {continue;}
                     if !self.atoms.get(&ida).unwrap().is_link(idb) {
                         self.apply_contact_reaction(ida, idb, product_state_a, product_state_b, product_contact);
+                        // after the (possible) bond is made: drag molecules across the membrane
+                        self.cross_if_needed(ida, substrate_key_a, product_key_a);
+                        self.cross_if_needed(idb, substrate_key_b, product_key_b);
                         done = true;
                     }
                 }
@@ -502,12 +514,59 @@ impl Reactor {
                 // link style reaction
                 let key1 = (substrate_key_a as u32) << 16 | (substrate_key_b as u32);
                 if let Some(link_id) = self.get_random_link_id(key1, rng) {
-                    self.apply_link_reaction(link_id, product_state_a, product_state_b, product_contact);
+                    // the link may be stored as (b, a) while the rule is written a.b:
+                    // give each atom the product state of *its* substrate slot
+                    let [first, second] = self.get_link(link_id).unwrap().links;
+                    let first_key = self.get_atom(first).unwrap().get_key();
+                    let (ida, idb) = if first_key == substrate_key_a { (first, second) } else { (second, first) };
+                    let (psa, psb) = if first_key == substrate_key_a {
+                        (product_state_a, product_state_b)
+                    } else {
+                        (product_state_b, product_state_a)
+                    };
+                    self.apply_link_reaction(link_id, psa, psb, product_contact);
+                    // after the (possible) bond break: drag molecules across the membrane
+                    self.cross_if_needed(ida, substrate_key_a, product_key_a);
+                    self.cross_if_needed(idb, substrate_key_b, product_key_b);
                 }
             }
         }
         self.relink();
 
+    }
+
+    /// If a reaction moved atom `id` across the membrane (substrate and product differ by the
+    /// OUTSIDE form bit), move the whole molecule it belongs to.
+    fn cross_if_needed(&mut self, id: ObjectId, substrate_key: u16, product_key: u16) {
+        let sf = (substrate_key >> 8) as u8;
+        let pf = (product_key >> 8) as u8;
+        if is_wildcard_form(sf) || is_wildcard_form(pf) {
+            return;
+        }
+        let outside = is_outside_form(pf);
+        if is_outside_form(sf) != outside {
+            self.move_molecule(id, outside);
+        }
+    }
+
+    /// Put every atom connected to `start` (its whole molecule) on one side of the membrane.
+    /// Only the OUTSIDE form bit changes (`B1.A1` going in becomes `b1.a1`); states are untouched. Returns the number of atoms visited.
+    pub fn move_molecule(&mut self, start: ObjectId, outside: bool) -> usize {
+        let mut visited = HashSet::new();
+        let mut queue = VecDeque::new();
+        visited.insert(start);
+        queue.push_back(start);
+        while let Some(id) = queue.pop_front() {
+            let atom = self.atoms.get_mut(&id).unwrap();
+            let form = atom.form() & !OUTSIDE;
+            atom.set_form(if outside { form | OUTSIDE } else { form });
+            for &n in atom.get_links() {
+                if visited.insert(n) {
+                    queue.push_back(n);
+                }
+            }
+        }
+        visited.len()
     }
 
     pub fn relink(&mut self) {
@@ -619,6 +678,8 @@ impl Reactor {
     pub fn get_events_number(&self) {}
 
     pub fn reactions(&self) -> &[Reaction] { &self.reactions }
+    /// How many times each reaction fired, parallel to `reactions()`.
+    pub fn fire_counts(&self) -> &[u64] { &self.fire_counts }
     pub fn current_time(&self) -> f64 { self.current_time }
     pub fn reaction_sequences(&self) -> &[(f64, usize)] { &self.reaction_sequence }
     /// Per-step snapshots: atom-count map and link-count map, parallel to `reaction_sequences()`.
@@ -771,14 +832,13 @@ impl Reactor {
 
 /// Convert an atom u16 key (form<<8 | state) to its symbolic label, e.g. "a0", "b3".
 fn reactor_key_sym(key: u16) -> String {
-    let form  = ((key & 0xff00) >> 8) as u8;
-    let state = (key & 0x00ff) as u8;
-    format!("{}{}", (form + 96) as char, state)
+    crate::atoms::key_symbol(key)
 }
 
 fn reaction_type_label(r: &Reaction) -> &'static str {
     if r.is_production()  { return "production"; }
     if r.is_degradation() { return "degradation"; }
+    if r.is_transform()   { return "transform"; }
     match (r.is_substrate_contact(), r.is_product_contact()) {
         (true,  true)  => "contact→bond",
         (true,  false) => "contact",
